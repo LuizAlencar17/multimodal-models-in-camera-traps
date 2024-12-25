@@ -11,6 +11,7 @@ from io import BytesIO
 
 
 def resize_image(input_path, image_dim=(500, 500)):
+    return Image.open(input_path)
     with Image.open(input_path) as img:
         return img.resize(image_dim, Image.Resampling.LANCZOS)
 

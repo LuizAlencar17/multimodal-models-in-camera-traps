@@ -13,7 +13,7 @@ from google.generativeai.types import HarmCategory, HarmBlockThreshold
 from flags import FLAGS
 from utils import get_results_path, get_prompt, get_label_mapper, get_label_mapper_reverse, resize_image
 
-GOOGLE_API_KEY = "AIzaSyBsXzWgDSE-naipvx7I79AeAnsGQlHMO2w"
+GOOGLE_API_KEY = "<KEY>"
 
 safety_settings = {
     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,

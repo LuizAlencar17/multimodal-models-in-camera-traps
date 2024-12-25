@@ -11,7 +11,8 @@ from utils import read_img_in_base64, get_results_path, get_prompt, get_label_ma
 from preprocess import QuestionAnsweringDataset
 from flags import FLAGS
 
-OPENAI_API_KEY = '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'
+OPENAI_API_KEY = '<KEY>'
+
 OPENAI_HEADERS = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {OPENAI_API_KEY}"
