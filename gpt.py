@@ -1,26 +1,22 @@
 import sys
 import torch
+import requests
 import pandas as pd
-import google.generativeai as genai
 
-from PIL import Image
 from tqdm import tqdm
 from sklearn.metrics import accuracy_score
 from torch.utils.data import DataLoader
+
+from utils import read_img_in_base64, get_results_path, get_prompt, get_label_mapper, get_label_mapper_reverse
 from preprocess import QuestionAnsweringDataset
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-
 from flags import FLAGS
-from utils import get_results_path, get_prompt, get_label_mapper, get_label_mapper_reverse, resize_image
 
-GOOGLE_API_KEY = "AIzaSyBsXzWgDSE-naipvx7I79AeAnsGQlHMO2w"
-
-safety_settings = {
-    HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-    HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+OPENAI_API_KEY = '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'
+OPENAI_HEADERS = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {OPENAI_API_KEY}"
 }
+
 
 tags = FLAGS.tags.split(",")
 task = FLAGS.task
@@ -39,18 +35,32 @@ prompt = get_prompt(model_name, task)
 device = torch.device("cuda")
 
 
-def gemini_generate(path, prompt):
-    genai.configure(api_key=GOOGLE_API_KEY)
-    model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
-    response = model.generate_content(
-        [prompt, resize_image(path)],
-        stream=True,
-        safety_settings=safety_settings)
-    response.resolve()
-    pred = ''
-    for part in response.parts:
-        pred += part.text
-    return pred
+def gpt4_generate(base64_image, prompt):
+    raw_response = requests.post("https://api.openai.com/v1/chat/completions", headers=OPENAI_HEADERS, json={
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "You are an assistant that can identify animal behavior in images without learning from past data."},
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": prompt
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    }
+                ]
+            }
+        ],
+        "max_tokens": 1
+    })
+    response = raw_response.json()
+    action = response['choices'][0]['message']['content'].lower()
+    return action
 
 
 def evaluation(file_name_csv, proportion=-1):
@@ -67,8 +77,8 @@ def evaluation(file_name_csv, proportion=-1):
         for image, label in zip(batch_images, batch_labels):
             try:
                 image_path = dataset.image_files[counter]
-                label_prompt_response = gemini_generate(image_path, prompt)
-
+                label_prompt_response = gpt4_generate(
+                    read_img_in_base64(image_path), prompt)
                 pred.append(label_prompt_response)
                 real.append(str(int(label)))
                 path.append(image_path)
