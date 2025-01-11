@@ -1,17 +1,18 @@
+import json
 import sys
-import torch
-import requests
+
 import pandas as pd
-
-from tqdm import tqdm
-from sklearn.metrics import accuracy_score
-from torch.utils.data import DataLoader
-
-from utils import read_img_in_base64, get_results_path, get_prompt, get_label_mapper, get_label_mapper_reverse
-from preprocess import QuestionAnsweringDataset
+import requests
+import torch
 from flags import FLAGS
+from preprocess import QuestionAnsweringDataset
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+from utils import (get_label_mapper, get_prompt, get_results_path,
+                   read_img_in_base64, remove_non_numeric)
 
-OPENAI_API_KEY = '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'
+OPENAI_API_KEY = json.load(open("./secrets.json"))["gpt"][0]
+
 OPENAI_HEADERS = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {OPENAI_API_KEY}"
@@ -29,13 +30,13 @@ checkpoint_path = FLAGS.checkpoint_path
 results_path = FLAGS.results_path
 
 label_mapper = get_label_mapper(task)
-label_mapper_reverse = get_label_mapper_reverse(task)
 prompt = get_prompt(model_name, task)
 
 device = torch.device("cuda")
 
 
 def gpt4_generate(base64_image, prompt):
+    """Generate content using GPT-4 API."""
     raw_response = requests.post("https://api.openai.com/v1/chat/completions", headers=OPENAI_HEADERS, json={
         "model": "gpt-4o-mini",
         "messages": [
@@ -56,46 +57,48 @@ def gpt4_generate(base64_image, prompt):
                 ]
             }
         ],
-        "max_tokens": 1
+        "max_tokens": 2
     })
     response = raw_response.json()
-    action = response['choices'][0]['message']['content'].lower()
-    return action
+    pred = response['choices'][0]['message']['content'].lower()
+    pred = remove_non_numeric(pred)
+    return label_mapper.get(pred)
 
 
 def evaluation(file_name_csv, proportion=-1):
-    print(f"evaluation using: {file_name_csv}")
+    """Evaluate the dataset without using DataLoader."""
+    print(f"Evaluation using: {file_name_csv}")
     pred, real, path = [], [], []
-    dataset = QuestionAnsweringDataset(file_name_csv=file_name_csv, task=task,
-                                       proportion=proportion)
-    dataloader = DataLoader(dataset=dataset,
-                            batch_size=batch_size)
-    pbar = tqdm(dataloader)
+    dataset = QuestionAnsweringDataset(
+        file_name_csv=file_name_csv, task=task, proportion=proportion, batch_size=batch_size)
+
     counter = 0
-    for batch in pbar:
-        batch_images, batch_labels = batch
+    for batch_images, batch_labels in tqdm(dataset.get_batches(),
+                                           total=dataset.get_total_batches()):
         for image, label in zip(batch_images, batch_labels):
             try:
                 image_path = dataset.image_files[counter]
                 label_prompt_response = gpt4_generate(
                     read_img_in_base64(image_path), prompt)
                 pred.append(label_prompt_response)
-                real.append(str(int(label)))
+                real.append(int(label))
                 path.append(image_path)
                 counter += 1
             except Exception as e:
                 print(f"[ERROR] {e}")
-    print(f"accuracy_score: {accuracy_score(real, pred)}")
+
+    print(f"Accuracy Score: {accuracy_score(real, pred)}")
     return pred, real, path
 
 
 def test():
+    """Run evaluation on the test dataset."""
     pred, real, path = evaluation(test_filename)
     df = pd.DataFrame({"pred": pred, "real": real, "path": path})
-    path_to_save = get_results_path(results_path, dataset_name,
-                                    model_name, tags)
+    path_to_save = get_results_path(
+        results_path, dataset_name, model_name, tags)
     df.to_csv(path_to_save, index=False)
 
 
-print(f"using device: {device} {sys.argv}")
+print(f"Using device: {device} {sys.argv}")
 {"test": test}.get(mode)()

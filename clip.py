@@ -1,16 +1,15 @@
 import sys
-import torch
+
 import pandas as pd
+import torch
 import torch.nn as nn
-
-from tqdm import tqdm
-from sklearn.metrics import accuracy_score
-from torch.utils.data import DataLoader
-
-from utils import get_model_and_processor, get_model_path, get_results_path, \
-    get_prompt, get_label_mapper, get_label_mapper_reverse, get_label_by_logits, get_real_by_label, get_one_hot_label
-from preprocess import SimilarityDataset
 from flags import FLAGS
+from preprocess import SimilarityDataset
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+from utils import (get_label_by_logits, get_model_and_processor,
+                   get_model_path, get_prompt, get_real_by_label,
+                   get_results_path)
 
 tags = FLAGS.tags.split(",")
 patience = FLAGS.patience
@@ -28,8 +27,6 @@ test_filename = FLAGS.test_filename
 checkpoint_path = FLAGS.checkpoint_path
 results_path = FLAGS.results_path
 
-label_mapper = get_label_mapper(task)
-label_mapper_reverse = get_label_mapper_reverse(task)
 prompt = get_prompt(model_name, task)
 model, processor = get_model_and_processor(model_name)
 
@@ -38,16 +35,14 @@ model.to(device)
 
 
 def evaluation(file_name_csv, proportion=-1):
-    print(f"evaluation using: {file_name_csv}")
+    print(f"Evaluation using: {file_name_csv}")
     pred, real, path = [], [], []
     dataset = SimilarityDataset(
-        file_name_csv=file_name_csv, task=task, proportion=proportion)
-    dataloader = DataLoader(dataset=dataset,
-                            batch_size=batch_size)
-    pbar = tqdm(dataloader)
+        file_name_csv=file_name_csv, task=task, proportion=proportion, batch_size=batch_size)
     counter = 0
-    for batch in pbar:
-        batch_images, batch_labels = batch
+
+    for batch_images, batch_labels in tqdm(dataset.get_batches(),
+                                           total=dataset.get_total_batches()):
         for image, label in zip(batch_images, batch_labels):
             inputs = processor(text=prompt, images=image,
                                return_tensors="pt", padding=True).to(device)
@@ -58,7 +53,8 @@ def evaluation(file_name_csv, proportion=-1):
             real.append(get_real_by_label(label[0]))
             path.append(dataset.image_files[counter])
             counter += 1
-    print(f"accuracy_score: {accuracy_score(real, pred)}")
+
+    print(f"Accuracy Score: {accuracy_score(real, pred)}")
     return pred, real, path
 
 
@@ -66,18 +62,20 @@ def train():
     loss_img = nn.CrossEntropyLoss()
     loss_txt = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
-    dataset = SimilarityDataset(file_name_csv=train_filename, task=task,
-                                shuffle=True, proportion=-1)
-    dataloader = DataLoader(dataset, batch_size=batch_size)
+    dataset = SimilarityDataset(
+        file_name_csv=train_filename, task=task, shuffle=True, proportion=-1, batch_size=batch_size)
     last_acc, current_patience = -1, 0
 
     for epoch in range(num_epochs):
         model.train()
-        pbar = tqdm(dataloader)
-        for batch in pbar:
+        pbar = tqdm(dataset.get_batches(),
+                    desc=f"Epoch {epoch+1}/{num_epochs}",
+                    total=dataset.get_total_batches())
+
+        for batch_images, batch_labels in pbar:
             optimizer.zero_grad()
             loss = 0
-            batch_images, batch_labels = batch
+
             for image, label in zip(batch_images, batch_labels):
                 label = label.to(device)
                 inputs = processor(text=prompt, images=image,
@@ -90,25 +88,24 @@ def train():
                     loss_img(logits_per_image, label) +
                     loss_txt(logits_per_text, label.T)
                 ) / 2
-        loss.backward()
-        optimizer.step()
-        pbar.set_description(
-            f"Epoch {epoch + 1}/{num_epochs}, Loss: {loss:.4f}")
 
-        # running validation subset
+            loss.backward()
+            optimizer.step()
+            pbar.set_description(f"Loss: {loss.item():.4f}")
+
+        # Validation
         pred, real, path = evaluation(val_filename, 10)
         acc = accuracy_score(real, pred)
         if acc > last_acc:
             current_patience = 0
-            print(
-                f"last accuracy: {last_acc} current accuracy: {acc}. saving model..")
+            print(f"Improved accuracy: {acc}. Saving model...")
             last_acc = acc
             torch.save(model.state_dict(), get_model_path(
                 checkpoint_path, dataset_name, model_name))
         else:
             current_patience += 1
             if current_patience > patience:
-                print("no patience, quitting train")
+                print("No improvement, stopping training.")
                 break
 
 
@@ -123,5 +120,5 @@ def test():
     df.to_csv(path_to_save, index=False)
 
 
-print(f"using device: {device} {sys.argv}")
+print(f"Using device: {device} {sys.argv}")
 {"train": train, "test": test}.get(mode)()

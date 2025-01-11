@@ -121,3 +121,4 @@ error.log
 *.temp
 tmp/
 temp/
+secrets.json

@@ -1,19 +1,23 @@
+import json
 import sys
-import torch
-import pandas as pd
+import time
+
 import google.generativeai as genai
-
-from PIL import Image
-from tqdm import tqdm
-from sklearn.metrics import accuracy_score
-from torch.utils.data import DataLoader
-from preprocess import QuestionAnsweringDataset
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-
+import pandas as pd
+import torch
 from flags import FLAGS
-from utils import get_results_path, get_prompt, get_label_mapper, get_label_mapper_reverse, resize_image
+from google.api_core.exceptions import ResourceExhausted
+from google.generativeai.types import HarmBlockThreshold, HarmCategory
+from preprocess import QuestionAnsweringDataset
+from sklearn.metrics import accuracy_score
+from tqdm import tqdm
+from utils import (get_label_mapper, get_prompt, get_results_path,
+                   remove_non_numeric, resize_image)
 
-GOOGLE_API_KEY = "AIzaSyBsXzWgDSE-naipvx7I79AeAnsGQlHMO2w"
+GOOGLE_API_KEYS = {
+    "idx": 0,
+    "keys": json.load(open("./secrets.json"))["gemini"]
+}
 
 safety_settings = {
     HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
@@ -33,59 +37,83 @@ checkpoint_path = FLAGS.checkpoint_path
 results_path = FLAGS.results_path
 
 label_mapper = get_label_mapper(task)
-label_mapper_reverse = get_label_mapper_reverse(task)
 prompt = get_prompt(model_name, task)
 
 device = torch.device("cuda")
 
 
 def gemini_generate(path, prompt):
-    genai.configure(api_key=GOOGLE_API_KEY)
-    model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
-    response = model.generate_content(
-        [prompt, resize_image(path)],
-        stream=True,
-        safety_settings=safety_settings)
-    response.resolve()
-    pred = ''
-    for part in response.parts:
-        pred += part.text
-    return pred
+    """Generate content using Gemini API."""
+    if GOOGLE_API_KEYS["idx"] >= len(GOOGLE_API_KEYS["keys"]):
+        GOOGLE_API_KEYS["idx"] = 0
+    try:
+        genai.configure(
+            api_key=GOOGLE_API_KEYS["keys"][GOOGLE_API_KEYS["idx"]])
+        model = genai.GenerativeModel('models/gemini-2.0-flash-exp')
+        response = model.generate_content(
+            [prompt, resize_image(path)],
+            stream=True,
+            safety_settings=safety_settings)
+        response.resolve()
+        pred = ''
+        for part in response.parts:
+            pred += part.text
+        pred = remove_non_numeric(pred)
+        return label_mapper.get(pred)
+    except ResourceExhausted:
+        seconds = 10
+        GOOGLE_API_KEYS['idx'] += 1
+        print(
+            f"[ResourceExhausted] updating key index: {GOOGLE_API_KEYS['idx']} waiting: {seconds} secounds")
+        time.sleep(seconds)
+        return gemini_generate(path, prompt)
+    except Exception as e:
+        GOOGLE_API_KEYS['idx'] += 1
+        print(f"[ERROR]: {e}")
+        return -1
 
 
 def evaluation(file_name_csv, proportion=-1):
-    print(f"evaluation using: {file_name_csv}")
+    """Evaluate the dataset without using DataLoader."""
+    print(f"Evaluation using: {file_name_csv}")
     pred, real, path = [], [], []
-    dataset = QuestionAnsweringDataset(file_name_csv=file_name_csv, task=task,
-                                       proportion=proportion)
-    dataloader = DataLoader(dataset=dataset,
-                            batch_size=batch_size)
-    pbar = tqdm(dataloader)
+    dataset = QuestionAnsweringDataset(
+        file_name_csv=file_name_csv, task=task, proportion=proportion, batch_size=batch_size)
+
     counter = 0
-    for batch in pbar:
-        batch_images, batch_labels = batch
+    for batch_images, batch_labels in tqdm(dataset.get_batches(),
+                                           total=dataset.get_total_batches()):
         for image, label in zip(batch_images, batch_labels):
             try:
                 image_path = dataset.image_files[counter]
                 label_prompt_response = gemini_generate(image_path, prompt)
 
                 pred.append(label_prompt_response)
-                real.append(str(int(label)))
+                real.append(int(label))
                 path.append(image_path)
+
+                # tmp: start
+                path_to_save = get_results_path(
+                    results_path, dataset_name, model_name, tags)
+                df = pd.DataFrame({"pred": pred, "real": real, "path": path})
+                df.to_csv(path_to_save, index=False)
+                # end: start
                 counter += 1
             except Exception as e:
                 print(f"[ERROR] {e}")
-    print(f"accuracy_score: {accuracy_score(real, pred)}")
+
+    print(f"Accuracy Score: {accuracy_score(real, pred)}")
     return pred, real, path
 
 
 def test():
+    """Run evaluation on the test dataset."""
     pred, real, path = evaluation(test_filename)
     df = pd.DataFrame({"pred": pred, "real": real, "path": path})
-    path_to_save = get_results_path(results_path, dataset_name,
-                                    model_name, tags)
+    path_to_save = get_results_path(
+        results_path, dataset_name, model_name, tags)
     df.to_csv(path_to_save, index=False)
 
 
-print(f"using device: {device} {sys.argv}")
+print(f"Using device: {device} {sys.argv}")
 {"test": test}.get(mode)()
