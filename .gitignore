@@ -118,6 +118,7 @@ error.log
 # Temporary files
 *.tmp
 *.out
+nohup.out
 *.temp
 tmp/
 temp/
