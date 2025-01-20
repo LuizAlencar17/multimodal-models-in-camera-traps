@@ -5,7 +5,7 @@ from absl import flags
 FLAGS = flags.FLAGS
 
 flags.DEFINE_string('tags', help='', default='-')
-flags.DEFINE_string('model_name', help='', default='gpt')
+flags.DEFINE_string('model_name', help='', default='blip')
 flags.DEFINE_string('task', help='', default='species')
 flags.DEFINE_string('mode', help='', default='test')
 flags.DEFINE_string('dataset_name', help='', default='serengeti')

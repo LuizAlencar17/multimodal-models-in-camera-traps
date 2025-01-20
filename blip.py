@@ -6,8 +6,8 @@ from flags import FLAGS
 from preprocess import QuestionAnsweringDataset
 from sklearn.metrics import accuracy_score
 from tqdm import tqdm
-from utils import (get_model_and_processor, get_model_path, get_prompt,
-                   get_results_path)
+from utils import (get_label_mapper, get_model_and_processor, get_model_path,
+                   get_prompt, get_results_path)
 
 tags = FLAGS.tags.split(",")
 patience = FLAGS.patience
@@ -27,7 +27,7 @@ results_path = FLAGS.results_path
 
 prompt = get_prompt(model_name, task)
 model, processor = get_model_and_processor(model_name)
-
+label_mapper = get_label_mapper(task)
 device = torch.device("cuda")
 model.to(device)
 
@@ -47,8 +47,8 @@ def evaluation(file_name_csv, proportion=-1):
             outputs = model.generate(**inputs, max_new_tokens=1)
             label_prompt_response = processor.decode(
                 outputs[0], skip_special_tokens=True)
-            pred.append(label_prompt_response)
-            real.append(str(int(label)))
+            pred.append(label_mapper.get(label_prompt_response, -1))
+            real.append(int(label))
             path.append(dataset.image_files[counter])
             counter += 1
 

@@ -46,9 +46,9 @@
 # python3 clip.py --flagfile=configs/clip/clip_test_species_serengeti_pretrained.config
 # python3 clip.py --flagfile=configs/clip/clip_test_species_serengeti.config
 
-# python3 blip.py --flagfile=configs/blip/blip_train_species_serengeti.config
-# python3 blip.py --flagfile=configs/blip/blip_test_species_serengeti_pretrained.config
-# python3 blip.py --flagfile=configs/blip/blip_test_species_serengeti.config
+python3 blip.py --flagfile=configs/blip/blip_train_species_serengeti.config
+python3 blip.py --flagfile=configs/blip/blip_test_species_serengeti_pretrained.config
+python3 blip.py --flagfile=configs/blip/blip_test_species_serengeti.config
 
-# python3 gpt.py --flagfile=configs/gpt/gpt_test_species_serengeti.config
+python3 gpt.py --flagfile=configs/gpt/gpt_test_species_serengeti.config
 python3 gemini.py --flagfile=configs/gemini/gemini_test_species_serengeti.config

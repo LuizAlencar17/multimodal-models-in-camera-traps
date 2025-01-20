@@ -59,7 +59,7 @@ def gemini_generate(path, prompt):
         for part in response.parts:
             pred += part.text
         pred = remove_non_numeric(pred)
-        return label_mapper.get(pred)
+        return label_mapper.get(pred, -1)
     except ResourceExhausted:
         seconds = 10
         GOOGLE_API_KEYS['idx'] += 1

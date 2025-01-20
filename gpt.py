@@ -62,7 +62,7 @@ def gpt4_generate(base64_image, prompt):
     response = raw_response.json()
     pred = response['choices'][0]['message']['content'].lower()
     pred = remove_non_numeric(pred)
-    return label_mapper.get(pred)
+    return label_mapper.get(pred, -1)
 
 
 def evaluation(file_name_csv, proportion=-1):

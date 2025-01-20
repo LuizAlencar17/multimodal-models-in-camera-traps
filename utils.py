@@ -70,10 +70,13 @@ def get_prompt(model_name: str, task: str):
             "clip": ["a photo of a background", "a photo of an animal"]
         },
         "species": {
-            "gemini": "identify the behavior the animals are performing. Respond only with one of the following options: 0) gazellethomsons, 1) zebra, 2) hartebeest, 3) wildebeest, 4) buffalo, 5) gazellegrants, 6) elephant, 7) otherbird, 8) hyenaspotted, 9) lionfemale, 10) topi and 11) eland",
-            "gpt": "identify the behavior the animals are performing. Respond only with one of the following options: 0) gazellethomsons, 1) zebra, 2) hartebeest, 3) wildebeest, 4) buffalo, 5) gazellegrants, 6) elephant, 7) otherbird, 8) hyenaspotted, 9) lionfemale, 10) topi and 11) eland",
-            "blip": "identify the behavior the animals are performing. Respond only with one of the following options: 0) gazellethomsons, 1) zebra, 2) hartebeest, 3) wildebeest, 4) buffalo, 5) gazellegrants, 6) elephant, 7) otherbird, 8) hyenaspotted, 9) lionfemale, 10) topi and 11) eland",
-            "clip": ["a photo of a gazellethomsons", "a photo of a zebra", "a photo of a hartebeest", "a photo of a wildebeest", "a photo of a buffalo", "a photo of a gazellegrants", "a photo of a elephant", "a photo of a otherbird", "a photo of a hyenaspotted", "a photo of a lionfemale", "a photo of a topi", "a photo of a eland"]
+            "gemini": "identify the behavior the animals are performing. Respond only with one of the following options: 0) hyena, 1) zebra, 2) giraffe, 3) buffalo, 4) gazelle, 5) wildebeest, 6) elephant, 7) lion and 8) bird",
+            "gpt": "identify the behavior the animals are performing. Respond only with one of the following options: 0) hyena, 1) zebra, 2) giraffe, 3) buffalo, 4) gazelle, 5) wildebeest, 6) elephant, 7) lion and 8) bird",
+            "blip": "identify the behavior the animals are performing. Respond only with one of the following options: 0) hyena, 1) zebra, 2) giraffe, 3) buffalo, 4) gazelle, 5) wildebeest, 6) elephant, 7) lion and 8) bird",
+            "clip": ["a photo of a hyena", "a photo of a zebra", "a photo of a giraffe",
+                     "a photo of a buffalo", "a photo of a gazelle", "a photo of a wildebeest",
+                     "a photo of an elephant", "a photo of a lion", "a photo of a bird"]
+
         }
     }
     return mapper[task][model_name]
@@ -82,18 +85,15 @@ def get_prompt(model_name: str, task: str):
 def get_label_mapper(task: str):
     mapper = {
         "species": {
-            "gazellethomsons": 0,
-            "zebra": 1,
-            "hartebeest": 2,
-            "wildebeest": 3,
-            "buffalo": 4,
-            "gazellegrants": 5,
-            "elephant": 6,
-            "otherbird": 7,
-            "hyenaspotted": 8,
-            "lionfemale": 9,
-            "topi": 10,
-            "eland": 11,
+            'hyena': 0,
+            'zebra': 1,
+            'giraffe': 2,
+            'buffalo': 3,
+            'gazelle': 4,
+            'wildebeest': 5,
+            'elephant': 6,
+            'lion': 7,
+            'bird': 8,
             "0": 0,
             "1": 1,
             "2": 2,
@@ -102,10 +102,7 @@ def get_label_mapper(task: str):
             "5": 5,
             "6": 6,
             "7": 7,
-            "8": 8,
-            "9": 9,
-            "10": 10,
-            "11": 11,
+            "8": 8
         },
         "behaviour": {"moving": 0, "eating": 1, "resting": 2, "0": 0, "1": 1, "2": 2},
         "animal": {"no": 0, "yes": 1, "0": 0, "1": 1, "2": 2}
@@ -115,7 +112,7 @@ def get_label_mapper(task: str):
 
 def get_one_hot_label(category, task):
     mapper = {
-        "species": 12,
+        "species": 9,
         "behaviour": 3,
         "animal": 2
     }
